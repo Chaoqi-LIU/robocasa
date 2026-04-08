@@ -304,17 +304,27 @@ from robosuite.robots import ALL_ROBOTS
 
 import mujoco
 
+# assert (
+#     mujoco.__version__ == "3.2.6"
+# ), "MuJoCo version must be 3.2.6. Please run pip install mujoco==3.2.6"
 assert (
-    mujoco.__version__ == "3.2.6"
-), "MuJoCo version must be 3.2.6. Please run pip install mujoco==3.2.6"
+    tuple(int(x) for x in mujoco.__version__.split(".")[:3]) >= (3, 2, 6)
+), "MuJoCo version must be >= 3.2.6. Please run pip install mujoco>=3.2.6"
 
 import numpy
 
+# assert numpy.__version__ in [
+#     "1.23.2",
+#     "1.23.3",
+#     "1.23.5",
+# ], "numpy version must be either 1.23.{2,3,5}. Please install one of these versions."
 assert numpy.__version__ in [
     "1.23.2",
     "1.23.3",
     "1.23.5",
-], "numpy version must be either 1.23.{2,3,5}. Please install one of these versions."
+    "2.2.5",
+    "2.2.6",
+], "numpy version must be either 1.23.{2,3,5} or 2.2.{5,6}. Please install one of these versions."
 
 import robosuite
 
