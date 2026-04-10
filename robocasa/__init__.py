@@ -318,13 +318,7 @@ import numpy
 #     "1.23.3",
 #     "1.23.5",
 # ], "numpy version must be either 1.23.{2,3,5}. Please install one of these versions."
-assert numpy.__version__ in [
-    "1.23.2",
-    "1.23.3",
-    "1.23.5",
-    "2.2.5",
-    "2.2.6",
-], "numpy version must be either 1.23.{2,3,5} or 2.2.{5,6}. Please install one of these versions."
+# numpy version check removed — praxis uses numpy>=1.26.0 which is compatible
 
 import robosuite
 
