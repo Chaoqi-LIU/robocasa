@@ -1135,6 +1135,17 @@ class Kitchen(ManipulationEnv, metaclass=KitchenEnvMeta):
                 new_joint = "mobilebase0_" + old_joint[6:]
                 elem.set("joint", new_joint)
 
+        # MuJoCo 3.x strict mesh-volume check: thin visual fixture meshes raise
+        # "mesh volume is too small" and suggest "setting inertia to shell".
+        # The fix is inertia="shell" on the <mesh> asset element (not on the geom).
+        # Kitchen fixture meshes are prefixed with "{name}_group_" by the scene
+        # builder; robot meshes (robot0_gN_vis) are intentionally excluded.
+        if asset is not None:
+            for mesh_elem in asset.findall("mesh"):
+                name = mesh_elem.get("name", "")
+                if "_group_" in name and name.endswith("_vis") and not mesh_elem.get("inertia"):
+                    mesh_elem.set("inertia", "shell")
+
         # result = ET.tostring(root, encoding="utf8").decode("utf8")
         result = ET.tostring(root).decode("utf8")
 
