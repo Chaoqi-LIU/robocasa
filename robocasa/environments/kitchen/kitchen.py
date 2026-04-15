@@ -1135,16 +1135,86 @@ class Kitchen(ManipulationEnv, metaclass=KitchenEnvMeta):
                 new_joint = "mobilebase0_" + old_joint[6:]
                 elem.set("joint", new_joint)
 
-        # MuJoCo 3.x strict mesh-volume check: thin visual fixture meshes raise
-        # "mesh volume is too small" and suggest "setting inertia to shell".
-        # The fix is inertia="shell" on the <mesh> asset element (not on the geom).
-        # Kitchen fixture meshes are prefixed with "{name}_group_" by the scene
-        # builder; robot meshes (robot0_gN_vis) are intentionally excluded.
+        # MuJoCo 3.5 rejects fixture visual meshes whose volume it cannot
+        # compute with "mesh volume is too small: NAME. Try setting inertia
+        # to shell". Robocasa names every fixture visual mesh
+        # "{fixture}_{position}_group_{subname}_vis"; robot/collision meshes
+        # never contain "_group_", so the name filter is safe. Setting
+        # inertia="shell" is enough for most meshes.
         if asset is not None:
             for mesh_elem in asset.findall("mesh"):
                 name = mesh_elem.get("name", "")
-                if "_group_" in name and name.endswith("_vis") and not mesh_elem.get("inertia"):
+                if (
+                    "_group_" in name
+                    and name.endswith("_vis")
+                    and not mesh_elem.get("inertia")
+                ):
                     mesh_elem.set("inertia", "shell")
+
+        # Adaptive second pass for fixtures whose visual meshes remain
+        # degenerate (e.g. hamilton_beach microwave model_3 — an 8-vertex /
+        # 4-triangle flat decoration sheet). Every mujoco 3.5 mesh-inertia
+        # method fails on these: legacy/shell report "for mesh geoms,
+        # inertia should be specified in the mesh asset", exact reports
+        # "negative volume", convex segfaults qhull. The only reliable
+        # option is to neutralize the offending geom — we can't delete it
+        # because robocasa later looks it up by name — so we convert it in
+        # place to a dust-mote box and drop the mesh reference. The visual
+        # loss is a single flat decoration that was already invisible.
+        #
+        # Bad meshes are discovered by trial-compile: attempt to compile
+        # with mujoco.MjModel.from_xml_string, parse the offending geom
+        # name from the raised ValueError, neutralize every geom that
+        # references the same mesh asset, then retry. Blacklisted mesh
+        # names are cached on the class so subsequent env inits short-
+        # circuit without the extra compile pass.
+        _neutralized_mesh_names: set = getattr(
+            type(self), "_robocasa_neutralized_meshes", set()
+        )
+        if not hasattr(type(self), "_robocasa_neutralized_meshes"):
+            type(self)._robocasa_neutralized_meshes = _neutralized_mesh_names
+
+        def _neutralize_geom(g: ET.Element) -> None:
+            g.set("type", "box")
+            g.set("size", "0.0001 0.0001 0.0001")
+            for _attr in ("mesh", "shellinertia"):
+                if _attr in g.attrib:
+                    del g.attrib[_attr]
+
+        if _neutralized_mesh_names:
+            for parent in root.iter():
+                for g in parent.findall("geom"):
+                    if g.get("mesh") in _neutralized_mesh_names:
+                        _neutralize_geom(g)
+
+        import mujoco as _mj
+        import re as _re
+        _geom_name_re = _re.compile(r"Element name '([^']+)'")
+        for _ in range(50):
+            xml_try = ET.tostring(root).decode("utf8")
+            try:
+                _mj.MjModel.from_xml_string(xml_try)
+                break
+            except ValueError as _exc:
+                _msg = str(_exc)
+                if "for mesh geoms, inertia should be specified" not in _msg:
+                    raise
+                _m = _geom_name_re.search(_msg)
+                if not _m:
+                    raise
+                _bad_geom_name = _m.group(1)
+                _target_mesh = None
+                for _g in root.iter("geom"):
+                    if _g.get("name") == _bad_geom_name:
+                        _target_mesh = _g.get("mesh")
+                        break
+                if not _target_mesh:
+                    raise
+                _neutralized_mesh_names.add(_target_mesh)
+                for _parent in root.iter():
+                    for _g in _parent.findall("geom"):
+                        if _g.get("mesh") == _target_mesh:
+                            _neutralize_geom(_g)
 
         # result = ET.tostring(root, encoding="utf8").decode("utf8")
         result = ET.tostring(root).decode("utf8")
