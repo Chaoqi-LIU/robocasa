@@ -1135,12 +1135,20 @@ class Kitchen(ManipulationEnv, metaclass=KitchenEnvMeta):
                 new_joint = "mobilebase0_" + old_joint[6:]
                 elem.set("joint", new_joint)
 
+        import mujoco as _mj
+
+        _mj_version_raw = str(getattr(_mj, "__version__", "0.0.0"))
+        _mj_parts = _mj_version_raw.split(".")
+        _mj_major = int(_mj_parts[0]) if len(_mj_parts) > 0 else 0
+        _mj_minor = int(_mj_parts[1]) if len(_mj_parts) > 1 else 0
+        _mesh_inertia_keyword = "shell" if (_mj_major, _mj_minor) >= (3, 5) else "legacy"
+
         # MuJoCo 3.5 rejects fixture visual meshes whose volume it cannot
         # compute with "mesh volume is too small: NAME. Try setting inertia
         # to shell". Robocasa names every fixture visual mesh
         # "{fixture}_{position}_group_{subname}_vis"; robot/collision meshes
         # never contain "_group_", so the name filter is safe. Setting
-        # inertia="shell" is enough for most meshes.
+        # inertia to a version-compatible keyword is enough for most meshes.
         if asset is not None:
             for mesh_elem in asset.findall("mesh"):
                 name = mesh_elem.get("name", "")
@@ -1149,7 +1157,7 @@ class Kitchen(ManipulationEnv, metaclass=KitchenEnvMeta):
                     and name.endswith("_vis")
                     and not mesh_elem.get("inertia")
                 ):
-                    mesh_elem.set("inertia", "shell")
+                    mesh_elem.set("inertia", _mesh_inertia_keyword)
 
         # Adaptive second pass for fixtures whose visual meshes remain
         # degenerate (e.g. hamilton_beach microwave model_3 — an 8-vertex /
@@ -1187,7 +1195,6 @@ class Kitchen(ManipulationEnv, metaclass=KitchenEnvMeta):
                     if g.get("mesh") in _neutralized_mesh_names:
                         _neutralize_geom(g)
 
-        import mujoco as _mj
         import re as _re
         _geom_name_re = _re.compile(r"Element name '([^']+)'")
         for _ in range(50):
