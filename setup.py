@@ -30,8 +30,6 @@ setup(
         "h5py",
         "lxml",
         "hidapi",
-        "tianshou==0.4.10",
-        "lerobot>=0.4.4",
         "gymnasium",
     ],
     eager_resources=["*"],
